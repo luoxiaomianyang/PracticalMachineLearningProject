@@ -1,0 +1,121 @@
+---
+title: "Practical Machine Learning Final Project"
+author: "Ruoshi Li"
+date: "3/9/2020"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+# Executive Summary
+
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. I will be predicting the manner in which they did the exercise.  
+
+```{r}
+# Set 'working directory'
+wdir <- "/Users/Ruoshi/Documents/Study/Data Science/Coursera_Johns_Hopkins/Class 8/Final Project"
+setwd(wdir)
+# load necessary libraries
+library(caret)
+library(kernlab)
+library(randomForest)
+```
+
+
+# Data Exploration
+
+```{r}
+# import training and testing datasets
+training_data <- read.csv("./pml-training.csv", header = T)
+testing_data <- read.csv("./pml-testing.csv", header = T)
+# check dataset dimensions
+dim(training_data)
+dim(testing_data)
+
+# remove near zero variance variables
+nzv <- nearZeroVar(training_data)
+training_data <- training_data[ ,-nzv]
+testing_data <- testing_data[ ,-nzv]
+dim(training_data)
+dim(testing_data)
+str(training_data)
+```
+We can see from the output that there are many NA cols in the dataset. Also, the first 6 cols are not related to the variable we are trying to predict. Will clean the dataset by removing those columns. 
+
+```{r}
+# remove cols that more than 90% of their values are NAs from training dataset and testing dataset
+training_remove <- which(colSums(is.na(training_data) |training_data=="")>0.9*dim(training_data)[1]) 
+training_data <- training_data[ , -training_remove]
+testing_data <- testing_data[ , -training_remove]
+# remove first 6 unrelated cols
+training_data <- training_data[ , -c(1:6)]
+testing_data <- testing_data[ , -c(1:6)]
+dim(training_data)
+
+```
+
+```{r}
+# split training dataset into training and testing parts
+set.seed(123)
+inTrain <- createDataPartition(training_data$classe, p = 0.7, list = FALSE)
+training <- training_data[inTrain, ]
+testing <- training_data[-inTrain, ]
+```
+
+# Model Building
+We will try three models in our model selection process: classification tree, gradient boosting and random forest. And we will compare their accuracy to pick the best one for our prediction.
+
+### Prediction with Classification Tree
+```{r}
+set.seed(1234)
+fitControl <- trainControl(method = "cv", number = 5, verboseIter = F)
+mod_tree <- train(classe ~ ., data = training, method = "rpart", trControl = fitControl)
+mod_tree$finalModel
+suppressMessages(library(rattle))
+fancyRpartPlot(mod_tree$finalModel)
+tree_pred <- predict(mod_tree, newdata = testing)
+tree_confMatrix <- confusionMatrix(testing$classe, tree_pred)
+tree_confMatrix$overall[1]
+```
+
+The accuracy for classification tree model is 55.23%, which is not good. We will then try different methods. 
+
+### Prediction with Gradient Boosting Method
+```{r, echo= TRUE, results = 'hide'}
+mod_gbm <- train(classe ~ ., data = training, method = "gbm", trControl = fitControl)
+```
+
+```{r}
+mod_gbm$finalModel
+plot(mod_gbm)
+gbm_pred <- predict(mod_gbm, newdata = testing)
+gbm_confMatrix <- confusionMatrix(testing$classe, gbm_pred)
+gbm_confMatrix$overall[1]
+```
+The accuracy for gradient boosting model is 95.84%. It is improved a lot from the previous classification model. We will now try the last method.
+
+### Prediction with Random Forest
+```{r}
+mod_rf <- train(classe ~ ., data = training, method = "rf", trControl = fitControl)
+mod_rf$finalModel
+plot(mod_rf)
+rf_pred <- predict(mod_rf, newdata = testing)
+rf_confMatrix <- confusionMatrix(testing$classe, rf_pred)
+rf_confMatrix$overall[1]
+```
+The accuracy for random forest model is 99.2%, which is very ideal. However, we will need to check the out of sample error to see if we have overfitting issue. 
+
+# Prediction with test data
+```{r}
+# use random forest model to predict since this is the model with highest accuracy
+test_pred <- predict(mod_rf, newdata = testing_data)
+test_pred
+```
+
+
+# Conclusion
+We can see from the above analysis that random forest model has the highest accuracy in predicting classe
+
+
+
+
